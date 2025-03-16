@@ -3,15 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anime search</title>
+    <title>影片搜索与播放</title>
+    <link rel="icon" href="logo/jpg" type="logo.jpg">
+
     <!-- 引入 MDUI CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mdui@1.0.2/dist/css/mdui.min.css">
     <style>
-        /* 自定义样式 */
+        /* 自定义页面背景 */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-image: src('bg.jpg'); /* 替换为你的背景图片链接 */
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        /* 高斯模糊效果 */
+        .blur-background {
+            background-color: rgba(255, 255, 255, 0.5); /* 半透明背景 */
+            backdrop-filter: blur(10px); /* 高斯模糊 */
+            border-radius: 8px; /* 圆角 */
+            padding: 20px;
+        }
+
+        /* 视频容器样式 */
         .video-container {
             max-width: 800px;
             margin: 20px auto;
-            background-color: #000;
+            background-color: rgba(0, 0, 0, 0.7); /* 半透明黑色背景 */
             border-radius: 8px;
             overflow: hidden;
             position: relative;
@@ -92,7 +113,9 @@
         .footer {
             margin-top: 40px;
             padding: 20px;
-            background-color: #f5f5f5;
+            background-color: rgba(255, 255, 255, 0.5); /* 半透明背景 */
+            backdrop-filter: blur(10px); /* 高斯模糊 */
+            border-radius: 8px; /* 圆角 */
             text-align: center;
         }
         .movie-card {
@@ -107,15 +130,15 @@
 </head>
 <body class="mdui-theme-primary-indigo mdui-theme-accent-pink">
     <!-- 公告栏 -->
-    <div class="mdui-container mdui-m-t-2">
+    <div class="mdui-container mdui-m-t-2 blur-background">
         <div class="mdui-alert mdui-alert-info">
             <i class="mdui-icon material-icons">info</i>
-            <strong>公告：</strong>本站仅提供影片搜索播放服务，不提供任何影片资源存储、录制、上传等服务，也不参与任何影片的录制、上传等行为。影片中的广告非本站所为，请勿相信。如有侵权，请联系影片提供方。
+            <strong>公告：</strong>欢迎使用影片搜索与播放系统！如有问题请联系管理员。
         </div>
     </div>
 
     <!-- 搜索页 -->
-    <div id="search-page" class="mdui-container mdui-m-t-2">
+    <div id="search-page" class="mdui-container mdui-m-t-2 blur-background">
         <div class="mdui-textfield mdui-textfield-floating-label">
             <label class="mdui-textfield-label">输入影片名称</label>
             <input class="mdui-textfield-input" type="text" id="search-input">
@@ -128,7 +151,7 @@
     </div>
 
     <!-- 详情页 -->
-    <div id="detail-page" class="mdui-container mdui-m-t-2" style="display: none;">
+    <div id="detail-page" class="mdui-container mdui-m-t-2 blur-background" style="display: none;">
         <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme" onclick="goBack()">返回</button>
         <div class="video-container mdui-m-t-2" id="video-container">
             <video id="video-player" width="100%" height="auto"></video>
@@ -138,6 +161,7 @@
                 <span class="time" id="current-time">00:00</span> / <span class="time" id="duration">00:00</span>
                 <button id="mute-btn">🔊</button>
                 <input type="range" id="volume-bar" value="100" max="100">
+                <button id="pip-btn">📺</button>
                 <button id="fullscreen-btn">⛶</button>
             </div>
         </div>
@@ -148,16 +172,13 @@
 
     <!-- 页脚 -->
     <div class="footer mdui-m-t-4">
-        <p>&copy; <span id="year"></span> Anime search. 保留所有权利.</p>
+        <p>© 2023 影片搜索与播放系统. 版权所有.</p>
         <p>Powered by MDUI.</p>
     </div>
 
     <!-- 引入 MDUI JS -->
     <script src="https://cdn.jsdelivr.net/npm/mdui@1.0.2/dist/js/mdui.min.js"></script>
     <script>
-        // 自动更新版权年份
-        document.getElementById('year').textContent = new Date().getFullYear();
-
         let currentVideo = null; // 当前播放的视频元素
 
         // 渲染影片列表
@@ -344,6 +365,7 @@
             const volumeBar = document.getElementById('volume-bar');
             const currentTime = document.getElementById('current-time');
             const duration = document.getElementById('duration');
+            const pipBtn = document.getElementById('pip-btn');
             const fullscreenBtn = document.getElementById('fullscreen-btn');
 
             // 播放/暂停按钮
@@ -386,6 +408,15 @@
                 videoPlayer.volume = volumeBar.value / 100;
             };
 
+            // 画中画按钮
+            pipBtn.onclick = () => {
+                if (document.pictureInPictureElement) {
+                    document.exitPictureInPicture();
+                } else if (videoPlayer !== document.pictureInPictureElement) {
+                    videoPlayer.requestPictureInPicture();
+                }
+            };
+
             // 全屏按钮
             fullscreenBtn.onclick = () => {
                 if (videoPlayer.requestFullscreen) {
@@ -398,6 +429,35 @@
                     videoPlayer.msRequestFullscreen();
                 }
             };
+
+            // 支持 SMTC
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: videoData.name,
+                    artist: '影片搜索与播放系统',
+                    artwork: [
+                        { src: videoData.image, sizes: '200x200', type: 'image/jpeg' }
+                    ]
+                });
+
+                navigator.mediaSession.setActionHandler('play', () => {
+                    videoPlayer.play();
+                    playPauseBtn.textContent = '⏸️';
+                });
+
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    videoPlayer.pause();
+                    playPauseBtn.textContent = '▶️';
+                });
+
+                navigator.mediaSession.setActionHandler('seekbackward', () => {
+                    videoPlayer.currentTime -= 10;
+                });
+
+                navigator.mediaSession.setActionHandler('seekforward', () => {
+                    videoPlayer.currentTime += 10;
+                });
+            }
         }
 
         // 格式化时间（秒 -> 分:秒）
