@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anime search</title>
+    <!-- 引入 MDUI CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mdui@1.0.2/dist/css/mdui.min.css">
+    <style>
+        /* 自定义样式 */
+        .video-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        .video-container video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .video-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .video-container:hover .video-controls {
+            opacity: 1;
+        }
+        .video-controls button {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .video-controls button:hover {
+            color: #007bff;
+        }
+        .video-controls input[type="range"] {
+            flex: 1;
+            height: 5px;
+            background-color: #555;
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .video-controls input[type="range"]:hover {
+            opacity: 1;
+        }
+        .video-controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background-color: #007bff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .video-controls .time {
+            color: #fff;
+            font-size: 14px;
+            margin: 0 10px;
+        }
+        .episode-list {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .episode-item {
+            padding: 10px;
+            background-color: #007bff;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .episode-item:hover {
+            background-color: #0056b3;
+        }
+        .footer {
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #f5f5f5;
+            text-align: center;
+        }
+        .movie-card {
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+        .movie-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body class="mdui-theme-primary-indigo mdui-theme-accent-pink">
+    <!-- 公告栏 -->
+    <div class="mdui-container mdui-m-t-2">
+        <div class="mdui-alert mdui-alert-info">
+            <i class="mdui-icon material-icons">info</i>
+            <strong>公告：</strong>本站仅提供影片搜索播放服务，不提供任何影片资源存储、录制、上传等服务，也不参与任何影片的录制、上传等行为。影片中的广告非本站所为，请勿相信。如有侵权，请联系影片提供方。
+        </div>
+    </div>
+
+    <!-- 搜索页 -->
+    <div id="search-page" class="mdui-container mdui-m-t-2">
+        <div class="mdui-textfield mdui-textfield-floating-label">
+            <label class="mdui-textfield-label">输入影片名称</label>
+            <input class="mdui-textfield-input" type="text" id="search-input">
+        </div>
+        <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme" onclick="searchMovies()">搜索</button>
+        <div class="mdui-m-t-2" id="error-message"></div>
+        <div class="movie-list mdui-m-t-2" id="movie-list">
+            <!-- 影片项将在这里动态生成 -->
+        </div>
+    </div>
+
+    <!-- 详情页 -->
+    <div id="detail-page" class="mdui-container mdui-m-t-2" style="display: none;">
+        <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme" onclick="goBack()">返回</button>
+        <div class="video-container mdui-m-t-2" id="video-container">
+            <video id="video-player" width="100%" height="auto"></video>
+            <div class="video-controls">
+                <button id="play-pause-btn">▶️</button>
+                <input type="range" id="seek-bar" value="0" max="100">
+                <span class="time" id="current-time">00:00</span> / <span class="time" id="duration">00:00</span>
+                <button id="mute-btn">🔊</button>
+                <input type="range" id="volume-bar" value="100" max="100">
+                <button id="fullscreen-btn">⛶</button>
+            </div>
+        </div>
+        <div class="movie-detail mdui-m-t-2" id="detail-content">
+            <!-- 影片详情将在这里动态生成 -->
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <div class="footer mdui-m-t-4">
+        <p>&copy; <span id="year"></span> Anime search. 保留所有权利.</p>
+        <p>Powered by MDUI.</p>
+    </div>
+
+    <!-- 引入 MDUI JS -->
+    <script src="https://cdn.jsdelivr.net/npm/mdui@1.0.2/dist/js/mdui.min.js"></script>
+    <script>
+        // 自动更新版权年份
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        let currentVideo = null; // 当前播放的视频元素
+
+        // 渲染影片列表
+        function renderMovies(movies) {
+            const movieList = document.getElementById('movie-list');
+            movieList.innerHTML = ''; // 清空当前列表
+
+            if (!Array.isArray(movies)) {
+                showError('返回的数据格式不正确');
+                return;
+            }
+
+            if (movies.length === 0) {
+                showError('未找到相关影片');
+                return;
+            }
+
+            movies.forEach((movie, index) => {
+                const movieItem = document.createElement('div');
+                movieItem.className = 'mdui-col-xs-6 mdui-col-sm-4 mdui-col-md-3 mdui-m-b-2';
+                movieItem.onclick = () => showMovieDetail(movie.name, index + 1);
+
+                const movieCard = document.createElement('div');
+                movieCard.className = 'mdui-card movie-card';
+
+                const movieImage = document.createElement('div');
+                movieImage.className = 'mdui-card-media';
+                movieImage.style.backgroundImage = `url(${movie.image})`;
+                movieImage.style.height = '200px';
+                movieImage.style.backgroundSize = 'cover';
+
+                const movieContent = document.createElement('div');
+                movieContent.className = 'mdui-card-content';
+
+                const movieName = document.createElement('h3');
+                movieName.className = 'mdui-card-primary-title';
+                movieName.textContent = movie.name;
+
+                const movieJi = document.createElement('p');
+                movieJi.className = 'mdui-card-subtitle';
+                movieJi.textContent = `状态: ${movie.ji}`;
+
+                const movieYear = document.createElement('p');
+                movieYear.className = 'mdui-card-subtitle';
+                movieYear.textContent = `年份: ${movie.year}`;
+
+                movieContent.appendChild(movieName);
+                movieContent.appendChild(movieJi);
+                movieContent.appendChild(movieYear);
+
+                movieCard.appendChild(movieImage);
+                movieCard.appendChild(movieContent);
+                movieItem.appendChild(movieCard);
+                movieList.appendChild(movieItem);
+            });
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.textContent = message;
+        }
+
+        // 搜索功能
+        function searchMovies() {
+            const searchInput = document.getElementById('search-input').value;
+            if (!searchInput) {
+                showError('请输入搜索内容');
+                return;
+            }
+
+            // 调用API
+            fetch(`https://oiapi.net/API/Anime?msg=${encodeURIComponent(searchInput)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络响应失败');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // 检查返回的数据格式
+                    if (data.code === 200 && Array.isArray(data.data)) {
+                        renderMovies(data.data); // 使用 data.data 渲染列表
+                        showError(''); // 清空错误信息
+                    } else {
+                        showError('返回的数据格式不正确');
+                    }
+                })
+                .catch(error => {
+                    console.error('搜索失败:', error);
+                    showError('搜索失败，请稍后重试');
+                });
+        }
+
+        // 显示影片详情
+        function showMovieDetail(movieName, index) {
+            // 隐藏搜索页，显示详情页
+            document.getElementById('search-page').style.display = 'none';
+            document.getElementById('detail-page').style.display = 'block';
+
+            // 请求影片详情
+            fetch(`https://oiapi.net/API/Anime?msg=${encodeURIComponent(movieName)}&type=1&n=${index}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络响应失败');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.code === 200 && data.data) {
+                        renderMovieDetail(data.data);
+                    } else {
+                        showError('获取影片详情失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('获取影片详情失败:', error);
+                    showError('获取影片详情失败，请稍后重试');
+                });
+        }
+
+        // 渲染影片详情
+        function renderMovieDetail(movie) {
+            const detailContent = document.getElementById('detail-content');
+            detailContent.innerHTML = `
+                <h2>${movie.name}</h2>
+                <img src="${movie.image}" alt="${movie.name}" style="width: 200px; border-radius: 8px;">
+                <p>${movie.desc}</p>
+                <p>年份: ${movie.year}</p>
+                <p>状态: ${movie.ji}</p>
+                <div class="episode-list" id="episode-list"></div>
+            `;
+
+            // 渲染集数列表
+            const episodeList = document.getElementById('episode-list');
+            movie.playlist.forEach((episode, index) => {
+                const episodeItem = document.createElement('div');
+                episodeItem.className = 'episode-item';
+                episodeItem.textContent = episode;
+                episodeItem.onclick = () => playEpisode(movie.name, index + 1);
+                episodeList.appendChild(episodeItem);
+            });
+
+            // 默认播放第一集
+            playEpisode(movie.name, 1);
+        }
+
+        // 播放某一集
+        function playEpisode(movieName, episodeIndex) {
+            fetch(`https://oiapi.net/API/Anime?msg=${encodeURIComponent(movieName)}&type=1&n=1&j=${episodeIndex}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络响应失败');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.code === 200 && data.data) {
+                        renderVideo(data.data);
+                    } else {
+                        showError('获取播放链接失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('获取播放链接失败:', error);
+                    showError('获取播放链接失败，请稍后重试');
+                });
+        }
+
+        // 渲染视频播放器
+        function renderVideo(videoData) {
+            const videoPlayer = document.getElementById('video-player');
+            if (currentVideo) {
+                currentVideo.pause(); // 停止当前视频
+            }
+            currentVideo = videoPlayer;
+            videoPlayer.src = videoData.play_url;
+            videoPlayer.play();
+
+            // 更新播放器控件
+            const playPauseBtn = document.getElementById('play-pause-btn');
+            const seekBar = document.getElementById('seek-bar');
+            const muteBtn = document.getElementById('mute-btn');
+            const volumeBar = document.getElementById('volume-bar');
+            const currentTime = document.getElementById('current-time');
+            const duration = document.getElementById('duration');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+
+            // 播放/暂停按钮
+            playPauseBtn.textContent = videoPlayer.paused ? '▶️' : '⏸️';
+            playPauseBtn.onclick = () => {
+                if (videoPlayer.paused) {
+                    videoPlayer.play();
+                    playPauseBtn.textContent = '⏸️';
+                } else {
+                    videoPlayer.pause();
+                    playPauseBtn.textContent = '▶️';
+                }
+            };
+
+            // 进度条
+            seekBar.value = 0;
+            videoPlayer.ontimeupdate = () => {
+                seekBar.value = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+                currentTime.textContent = formatTime(videoPlayer.currentTime);
+            };
+            seekBar.oninput = () => {
+                videoPlayer.currentTime = (seekBar.value / 100) * videoPlayer.duration;
+            };
+
+            // 视频时长
+            videoPlayer.onloadedmetadata = () => {
+                duration.textContent = formatTime(videoPlayer.duration);
+            };
+
+            // 静音按钮
+            muteBtn.textContent = videoPlayer.muted ? '🔇' : '🔊';
+            muteBtn.onclick = () => {
+                videoPlayer.muted = !videoPlayer.muted;
+                muteBtn.textContent = videoPlayer.muted ? '🔇' : '🔊';
+            };
+
+            // 音量控制
+            volumeBar.value = videoPlayer.volume * 100;
+            volumeBar.oninput = () => {
+                videoPlayer.volume = volumeBar.value / 100;
+            };
+
+            // 全屏按钮
+            fullscreenBtn.onclick = () => {
+                if (videoPlayer.requestFullscreen) {
+                    videoPlayer.requestFullscreen();
+                } else if (videoPlayer.mozRequestFullScreen) {
+                    videoPlayer.mozRequestFullScreen();
+                } else if (videoPlayer.webkitRequestFullscreen) {
+                    videoPlayer.webkitRequestFullscreen();
+                } else if (videoPlayer.msRequestFullscreen) {
+                    videoPlayer.msRequestFullscreen();
+                }
+            };
+        }
+
+        // 格式化时间（秒 -> 分:秒）
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        // 返回搜索页
+        function goBack() {
+            if (currentVideo) {
+                currentVideo.pause(); // 停止视频播放
+                currentVideo = null;
+            }
+            document.getElementById('search-page').style.display = 'block';
+            document.getElementById('detail-page').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
